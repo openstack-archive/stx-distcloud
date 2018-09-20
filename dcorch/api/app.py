@@ -12,17 +12,19 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+#
+# Copyright (c) 2018 Wind River Systems, Inc.
 
 import pecan
 
 from keystonemiddleware import auth_token
 from oslo_config import cfg
 from oslo_middleware import request_id
-from oslo_service import service
 from oslo_service import wsgi
 
 from dcorch.common import context as ctx
 from dcorch.common.i18n import _
+from dcorch.common import service
 
 
 def setup_app(*args, **kwargs):
