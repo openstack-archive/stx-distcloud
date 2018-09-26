@@ -1,0 +1,9 @@
+Code-Review+2: Bart Wensley <barton.wensley@windriver.com>
+Code-Review+1: Lachlan Plant <lachlan.plant@windriver.com>
+Workflow+1: Brent Rowsell <brent.rowsell@windriver.com>
+Verified+2: Zuul
+Submitted-by: Zuul
+Submitted-at: Wed, 26 Sep 2018 21:41:48 +0000
+Reviewed-on: https://review.openstack.org/604468
+Project: openstack/stx-distcloud
+Branch: refs/heads/master
