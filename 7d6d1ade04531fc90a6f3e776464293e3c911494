@@ -1,0 +1,9 @@
+Code-Review+1: Abraham Arce <abraham.arce.moreno@intel.com>
+Code-Review+2: Bart Wensley <barton.wensley@windriver.com>
+Workflow+1: Bart Wensley <barton.wensley@windriver.com>
+Verified+2: Zuul
+Submitted-by: Zuul
+Submitted-at: Wed, 26 Sep 2018 12:28:41 +0000
+Reviewed-on: https://review.openstack.org/605107
+Project: openstack/stx-distcloud
+Branch: refs/heads/master
