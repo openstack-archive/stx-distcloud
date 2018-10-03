@@ -265,21 +265,22 @@ class SysinvSyncThread(SyncThread):
                     LOG.debug("sync_ptp transport %s" % transport,
                               extra=self.log_extra)
                 if ipayload.get('path') == '/mechanism':
-                    enabled = ipayload.get('value')
+                    mechanism = ipayload.get('value')
                     LOG.debug("sync_ptp mechanism %s" % mechanism,
                               extra=self.log_extra)
                 if all([enabled, mode, transport, mechanism]):
                     break
         else:
             enabled = payload.get('enabled')
+            LOG.debug("sync_ptp enabled %s" % enabled, extra=self.log_extra)
             mode = payload.get('mode')
+            LOG.debug("sync_ptp mode %s" % mode, extra=self.log_extra)
             transport = payload.get('transport')
+            LOG.debug("sync_ptp transport %s" % transport, extra=self.log_extra)
             mechanism = payload.get('mechanism')
-            LOG.debug("sync_ptp enabled %s mode %s transport %s mechanism %s" %
-                      enabled, mode, transport, mechanism,
-                      extra=self.log_extra)
+            LOG.debug("sync_ptp mechanism %s" % mechanism, extra=self.log_extra)
 
-        if enabled is None:
+        if not any([enabled, mode, transport, mechanism]):
             LOG.info("sync_ptp No status update found in resource_info"
                      "{}".format(request.orch_job.resource_info),
                      extra=self.log_extra)
