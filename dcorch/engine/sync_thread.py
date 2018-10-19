@@ -15,12 +15,10 @@
 
 import threading
 
+from oslo_config import cfg
 from oslo_log import log as logging
 
-from keystoneauth1 import loading
-from keystoneauth1 import session
-from keystoneclient import client as keystoneclient
-
+from dbsync.dbsyncclient import client as dbsyncclient
 from dcmanager.common import consts as dcmanager_consts
 from dcmanager.rpc import client as dcmanager_rpc_client
 from dcorch.common import consts
@@ -30,7 +28,11 @@ from dcorch.common import utils
 from dcorch.objects import orchrequest
 from dcorch.objects import resource
 from dcorch.objects import subcloud_resource
-from oslo_config import cfg
+
+from keystoneauth1 import loading
+from keystoneauth1 import session
+from keystoneclient import client as keystoneclient
+
 
 LOG = logging.getLogger(__name__)
 
@@ -51,6 +53,7 @@ STATE_COMPLETED = 'completed'
 # Audit findings
 AUDIT_RESOURCE_MISSING = 'missing'
 AUDIT_RESOURCE_EXTRA = 'extra_resource'
+AUDIT_RESOURCE_MISMATCHED = 'mismatched'
 
 
 class SyncThread(object):
@@ -81,6 +84,7 @@ class SyncThread(object):
         self.sc_admin_session = None
         self.admin_session = None
         self.ks_client = None
+        self.dbs_client = None
 
     def start(self):
         if self.status == STATUS_NEW:
@@ -124,7 +128,13 @@ class SyncThread(object):
             user_domain_name=cfg.CONF.cache.admin_user_domain_name)
         self.admin_session = session.Session(
             auth=auth, timeout=60, additional_headers=consts.USER_HEADER)
+
         self.ks_client = keystoneclient.Client(
+            session=self.admin_session,
+            region_name=consts.VIRTUAL_MASTER_CLOUD)
+        # dbsync client of dbsync agent
+        self.dbs_client = dbsyncclient.Client(
+            endpoint_type=consts.DBS_ENDPOINT_INTERNAL,
             session=self.admin_session,
             region_name=consts.VIRTUAL_MASTER_CLOUD)
 
@@ -388,15 +398,17 @@ class SyncThread(object):
         self.condition.release()
 
     def sync_audit(self):
-        LOG.debug("{}: starting sync audit".format(self.audit_thread.name),
-                  extra=self.log_extra)
+        if self.audit_thread:
+            LOG.debug("{}: starting sync audit".format(self.audit_thread.name),
+                      extra=self.log_extra)
 
         total_num_of_audit_jobs = 0
         for resource_type in self.audit_resources:
             if not self.subcloud_engine.is_enabled() or self.should_exit():
-                LOG.info("{}: aborting sync audit, as subcloud is disabled"
-                         .format(self.audit_thread.name),
-                         extra=self.log_extra)
+                if self.audit_thread:
+                    LOG.info("{}: aborting sync audit, as subcloud is disabled"
+                             .format(self.audit_thread.name),
+                             extra=self.log_extra)
                 return
 
             # Skip resources with outstanding sync requests
@@ -453,8 +465,9 @@ class SyncThread(object):
             # subcloud/endpoint" alarm raised, then clear it
             pass
 
-        LOG.debug("{}: done sync audit".format(self.audit_thread.name),
-                  extra=self.log_extra)
+        if self.audit_thread:
+            LOG.debug("{}: done sync audit".format(self.audit_thread.name),
+                      extra=self.log_extra)
 
     def audit_find_missing(self, resource_type, m_resources,
                            db_resources, sc_resources,
@@ -553,9 +566,25 @@ class SyncThread(object):
                 missing_resource = True
 
             if missing_resource:
-                # Resource is missing from subcloud, take action
+                # It's possible that subcloud has a resource that has the same
+                # ids as the master resource but with different details. If so
+                # the audit action will be updating that subcloud resource
+                # instead of creating it.
+                mismatched_resource = False
+                for sc_r in sc_resources:
+                    if self.has_same_ids(resource_type, m_r, sc_r):
+                        mismatched_resource = True
+                        break
+                if mismatched_resource:
+                    audit_action = AUDIT_RESOURCE_MISMATCHED
+                else:
+                    audit_action = AUDIT_RESOURCE_MISSING
+                    sc_r = None
+
+                # Take action for the subcloud resource
                 num_of_audit_jobs += self.audit_action(
-                    resource_type, AUDIT_RESOURCE_MISSING, m_r)
+                    resource_type, audit_action, m_r, sc_r)
+
                 # As the subcloud resource is missing, invoke
                 # the hook for dependants with no subcloud resource.
                 # Resource implementation should handle this.
@@ -667,6 +696,9 @@ class SyncThread(object):
     def same_resource(self, resource_type, m_resource, sc_resource):
         return True
 
+    def has_same_ids(self, resource_type, m_resource, sc_resource):
+        return False
+
     def map_subcloud_resource(self, resource_type, m_r, m_rsrc_db,
                               sc_resources):
         # Child classes can override this function to map an existing subcloud
@@ -694,7 +726,7 @@ class SyncThread(object):
         # Return true to try creating the resource again
         return True
 
-    def audit_action(self, resource_type, finding, resource):
+    def audit_action(self, resource_type, finding, resource, sc_resource=None):
         LOG.info("audit_action: {}/{}"
                  .format(finding, resource_type),
                  extra=self.log_extra)
@@ -713,6 +745,17 @@ class SyncThread(object):
                     resource_type, resource,
                     consts.OPERATION_TYPE_CREATE))
             num_of_audit_jobs += 1
+        elif finding == AUDIT_RESOURCE_MISMATCHED:
+            # default action is update for a 'mismatched' resource
+            self.schedule_work(
+                self.endpoint_type, resource_type,
+                resource_id,
+                consts.OPERATION_TYPE_PUT,
+                self.get_resource_info(
+                    resource_type, sc_resource,
+                    consts.OPERATION_TYPE_PUT))
+            num_of_audit_jobs += 1
+
         elif finding == AUDIT_RESOURCE_EXTRA:
             # default action is delete for an 'extra_resource'
             # resource passed in is db_resource (resource in dcorch DB)
