@@ -1329,7 +1329,7 @@ class SysinvSyncThread(SyncThread):
                  extra=self.log_extra)
         return False
 
-    def audit_action(self, resource_type, finding, resource):
+    def audit_action(self, resource_type, finding, resource, sc_source=None):
         if resource_type in self.SYSINV_MODIFY_RESOURCES:
             LOG.info("audit_action: {}/{}"
                      .format(finding, resource_type),
