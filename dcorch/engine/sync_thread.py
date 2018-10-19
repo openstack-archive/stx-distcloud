@@ -15,12 +15,10 @@
 
 import threading
 
+from oslo_config import cfg
 from oslo_log import log as logging
 
-from keystoneauth1 import loading
-from keystoneauth1 import session
-from keystoneclient import client as keystoneclient
-
+from dcdbsync.dbsyncclient import client as dbsyncclient
 from dcmanager.common import consts as dcmanager_consts
 from dcmanager.rpc import client as dcmanager_rpc_client
 from dcorch.common import consts
@@ -30,7 +28,11 @@ from dcorch.common import utils
 from dcorch.objects import orchrequest
 from dcorch.objects import resource
 from dcorch.objects import subcloud_resource
-from oslo_config import cfg
+
+from keystoneauth1 import loading
+from keystoneauth1 import session
+from keystoneclient import client as keystoneclient
+
 
 LOG = logging.getLogger(__name__)
 
@@ -81,6 +83,7 @@ class SyncThread(object):
         self.sc_admin_session = None
         self.admin_session = None
         self.ks_client = None
+        self.dbs_client = None
 
     def start(self):
         if self.status == STATUS_NEW:
@@ -124,7 +127,13 @@ class SyncThread(object):
             user_domain_name=cfg.CONF.cache.admin_user_domain_name)
         self.admin_session = session.Session(
             auth=auth, timeout=60, additional_headers=consts.USER_HEADER)
+
         self.ks_client = keystoneclient.Client(
+            session=self.admin_session,
+            region_name=consts.VIRTUAL_MASTER_CLOUD)
+        # dbsync client of dbsync agent
+        self.dbs_client = dbsyncclient.Client(
+            endpoint_type=consts.DBS_ENDPOINT_INTERNAL,
             session=self.admin_session,
             region_name=consts.VIRTUAL_MASTER_CLOUD)
 
@@ -163,6 +172,10 @@ class SyncThread(object):
             self.sc_admin_session = session.Session(
                 auth=sc_auth, timeout=60,
                 additional_headers=consts.USER_HEADER)
+
+    def initial_sync(self):
+        # Return True to indicate initial sync success
+        return True
 
     def enable(self):
         # Called when DC manager thinks this subcloud is good to go.
@@ -388,15 +401,17 @@ class SyncThread(object):
         self.condition.release()
 
     def sync_audit(self):
-        LOG.debug("{}: starting sync audit".format(self.audit_thread.name),
-                  extra=self.log_extra)
+        if self.audit_thread:
+            LOG.debug("{}: starting sync audit".format(self.audit_thread.name),
+                      extra=self.log_extra)
 
         total_num_of_audit_jobs = 0
         for resource_type in self.audit_resources:
             if not self.subcloud_engine.is_enabled() or self.should_exit():
-                LOG.info("{}: aborting sync audit, as subcloud is disabled"
-                         .format(self.audit_thread.name),
-                         extra=self.log_extra)
+                if self.audit_thread:
+                    LOG.info("{}: aborting sync audit, as subcloud is disabled"
+                             .format(self.audit_thread.name),
+                             extra=self.log_extra)
                 return
 
             # Skip resources with outstanding sync requests
@@ -453,8 +468,9 @@ class SyncThread(object):
             # subcloud/endpoint" alarm raised, then clear it
             pass
 
-        LOG.debug("{}: done sync audit".format(self.audit_thread.name),
-                  extra=self.log_extra)
+        if self.audit_thread:
+            LOG.debug("{}: done sync audit".format(self.audit_thread.name),
+                      extra=self.log_extra)
 
     def audit_find_missing(self, resource_type, m_resources,
                            db_resources, sc_resources,
@@ -530,6 +546,7 @@ class SyncThread(object):
                             extra=self.log_extra)
                         # Subcloud resource is present in DB, but the check
                         # for same_resource() was negative. Either the resource
+
                         # disappeared from subcloud or the resource details
                         # are different from that of master cloud. Let the
                         # resource implementation decide on the audit action.
@@ -556,6 +573,7 @@ class SyncThread(object):
                 # Resource is missing from subcloud, take action
                 num_of_audit_jobs += self.audit_action(
                     resource_type, AUDIT_RESOURCE_MISSING, m_r)
+
                 # As the subcloud resource is missing, invoke
                 # the hook for dependants with no subcloud resource.
                 # Resource implementation should handle this.
@@ -667,6 +685,9 @@ class SyncThread(object):
     def same_resource(self, resource_type, m_resource, sc_resource):
         return True
 
+    def has_same_ids(self, resource_type, m_resource, sc_resource):
+        return False
+
     def map_subcloud_resource(self, resource_type, m_r, m_rsrc_db,
                               sc_resources):
         # Child classes can override this function to map an existing subcloud
@@ -713,6 +734,7 @@ class SyncThread(object):
                     resource_type, resource,
                     consts.OPERATION_TYPE_CREATE))
             num_of_audit_jobs += 1
+
         elif finding == AUDIT_RESOURCE_EXTRA:
             # default action is delete for an 'extra_resource'
             # resource passed in is db_resource (resource in dcorch DB)
