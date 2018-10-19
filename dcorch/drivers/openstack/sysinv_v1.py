@@ -74,6 +74,10 @@ class SysinvClient(base.DriverBase):
             token = session.get_token()
             client = cgts_client.Client(
                 api_version,
+                username=session.auth._username,
+                password=session.auth._password,
+                tenant_name=session.auth._project_name,
+                auth_url=session.auth.auth_url,
                 endpoint=endpoint,
                 token=token)
         except exceptions.ServiceUnavailable:
@@ -710,7 +714,7 @@ class SysinvClient(base.DriverBase):
 
         return iuser
 
-    def create_fernet_repo(self, key_list):
+    def create_fernet_repo(self, key_list=None):
         """Add the fernet keys for this region
 
            :param: key list payload
