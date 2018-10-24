@@ -402,7 +402,8 @@ class SysinvClient(base.DriverBase):
             if k in self.REMOTELOGGING_PATCH_ATTRS:
                 if k == 'action':
                     action_found = True
-                elif k == 'enabled' and not isinstance(v, basestring):
+                elif (k == 'enabled' and
+                    not isinstance(v, basestring)):    # noqa F821
                     # api requires a string for enabled
                     if not v:
                         patch[k] = 'false'
