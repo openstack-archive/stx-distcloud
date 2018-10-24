@@ -22,6 +22,7 @@ from cgtsclient.v1.icommunity import CREATION_ATTRIBUTES \
 from cgtsclient.v1.itrapdest import CREATION_ATTRIBUTES \
     as SNMP_TRAPDEST_CREATION_ATTRIBUTES
 from oslo_log import log
+import six
 from sysinv.common import constants as sysinv_constants
 
 from dcorch.common import consts
@@ -402,7 +403,7 @@ class SysinvClient(base.DriverBase):
             if k in self.REMOTELOGGING_PATCH_ATTRS:
                 if k == 'action':
                     action_found = True
-                elif k == 'enabled' and not isinstance(v, basestring):
+                elif k == 'enabled' and not isinstance(v, six.string_types):
                     # api requires a string for enabled
                     if not v:
                         patch[k] = 'false'
