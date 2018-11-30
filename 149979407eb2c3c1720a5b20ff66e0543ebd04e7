@@ -1,0 +1,9 @@
+Code-Review+2: Bart Wensley <barton.wensley@windriver.com>
+Code-Review+2: Chris Friesen <chris.friesen@windriver.com>
+Workflow+1: Chris Friesen <chris.friesen@windriver.com>
+Verified+2: Zuul
+Submitted-by: Zuul
+Submitted-at: Fri, 30 Nov 2018 21:28:33 +0000
+Reviewed-on: https://review.openstack.org/620701
+Project: openstack/stx-distcloud
+Branch: refs/heads/master
