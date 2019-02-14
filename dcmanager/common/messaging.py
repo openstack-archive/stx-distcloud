@@ -77,8 +77,8 @@ def setup(url=None, optional=False):
         oslo_messaging.set_transport_defaults('dcmanager')
         exmods = ['dcmanager.common.exception']
         try:
-            TRANSPORT = oslo_messaging.get_transport(
-                cfg.CONF, url, allowed_remote_exmods=exmods, aliases=_ALIASES)
+            TRANSPORT = oslo_messaging.get_rpc_transport(
+                cfg.CONF, url, allowed_remote_exmods=exmods)
         except oslo_messaging.InvalidTransportURL as e:
             TRANSPORT = None
             if not optional or e.url:
