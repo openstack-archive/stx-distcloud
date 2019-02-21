@@ -281,7 +281,7 @@ class SubcloudManager(manager.Manager):
 
         try:
             subcloud_offline = fm_const.FM_ALARM_ID_DC_SUBCLOUD_OFFLINE
-            fault = self.fm_api.get_fault(subcloud_offline,
+            resp, fault = self.fm_api.get_fault(subcloud_offline,
                                           entity_instance_id)
 
             if fault:
@@ -425,7 +425,7 @@ class SubcloudManager(manager.Manager):
 
                 entity_instance_id = "subcloud=%s.resource=%s" % \
                                      (subcloud.name, endpoint_type)
-                fault = self.fm_api.get_fault(
+                resp, fault = self.fm_api.get_fault(
                     fm_const.FM_ALARM_ID_DC_SUBCLOUD_RESOURCE_OUT_OF_SYNC,
                     entity_instance_id)
 
@@ -478,7 +478,7 @@ class SubcloudManager(manager.Manager):
                     entity_instance_id = "subcloud=%s.resource=%s" % \
                                          (subcloud.name, endpoint)
 
-                    fault = self.fm_api.get_fault(
+                    resp, fault = self.fm_api.get_fault(
                         fm_const.FM_ALARM_ID_DC_SUBCLOUD_RESOURCE_OUT_OF_SYNC,
                         entity_instance_id)
 

@@ -164,7 +164,7 @@ class SubcloudAuditManager(manager.Manager):
                          (avail_to_set, subcloud_name))
 
                 entity_instance_id = "subcloud=%s" % subcloud_name
-                fault = self.fm_api.get_fault(
+                resp, fault = self.fm_api.get_fault(
                     fm_const.FM_ALARM_ID_DC_SUBCLOUD_OFFLINE,
                     entity_instance_id)
 
