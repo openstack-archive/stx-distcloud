@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Copyright (c) 2017 Wind River Systems, Inc.
+# Copyright (c) 2017-2019 Wind River Systems, Inc.
 #
 # The right to copy, distribute, modify, or otherwise make use
 # of this software may be licensed only pursuant to the terms
@@ -23,10 +23,18 @@
 import itertools
 import six.moves
 
+# import six
+
+from netaddr import AddrFormatError
+from netaddr import IPAddress
+from netaddr import IPNetwork
+
 from dcmanager.common import consts
 from dcmanager.common import exceptions
 from dcmanager.db import api as db_api
 from dcmanager.drivers.openstack import vim
+
+from controllerconfig.common.exceptions import ValidateFail
 
 
 def get_import_path(cls):
@@ -90,3 +98,58 @@ def get_sw_update_opts(context,
 
         return db_api.sw_update_opts_w_name_db_model_to_dict(
             sw_update_opts_ref, consts.SW_UPDATE_DEFAULT_TITLE)
+
+
+def ip_version_to_string(ip_version):
+    """Determine whether a nameserver address is valid."""
+    if ip_version == 4:
+        return "IPv4"
+    elif ip_version == 6:
+        return "IPv6"
+    else:
+        return "IP"
+
+
+def validate_network_str(network_str, minimum_size,
+                         existing_networks=None, multicast=False):
+    """Determine whether a network is valid."""
+    try:
+        network = IPNetwork(network_str)
+        if network.ip != network.network:
+            raise ValidateFail("Invalid network address")
+        elif network.size < minimum_size:
+            raise ValidateFail("Subnet too small - must have at least %d "
+                               "addresses" % minimum_size)
+        elif network.version == 6 and network.prefixlen < 64:
+            raise ValidateFail("IPv6 minimum prefix length is 64")
+        elif existing_networks:
+            if any(network.ip in subnet for subnet in existing_networks):
+                raise ValidateFail("Subnet overlaps with another "
+                                   "configured subnet")
+        elif multicast and not network.is_multicast():
+            raise ValidateFail("Invalid subnet - must be multicast")
+        return network
+    except AddrFormatError:
+        raise ValidateFail(
+            "Invalid subnet - not a valid IP subnet")
+
+
+def validate_address_str(ip_address_str, network):
+    """Determine whether an address is valid."""
+    try:
+        ip_address = IPAddress(ip_address_str)
+        if ip_address.version != network.version:
+            msg = ("Invalid IP version - must match network version " +
+                   ip_version_to_string(network.version))
+            raise ValidateFail(msg)
+        elif ip_address == network:
+            raise ValidateFail("Cannot use network address")
+        elif ip_address == network.broadcast:
+            raise ValidateFail("Cannot use broadcast address")
+        elif ip_address not in network:
+            raise ValidateFail(
+                "Address must be in subnet %s" % str(network))
+        return ip_address
+    except AddrFormatError:
+        raise ValidateFail(
+            "Invalid address - not a valid IP address")
